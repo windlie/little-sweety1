@@ -1,0 +1,280 @@
+# -*-coding:utf-8-*-
+__author__ = 'Administrator'
+
+from math import log
+import operator
+import json
+import random
+import sys
+import time
+
+def calcShannonEnt(dataSet):
+    numEntries = len(dataSet)
+    labelCounts = {}
+    for featVec in dataSet:
+        currentLabel = featVec[-1]
+        if currentLabel not in labelCounts.keys():
+            labelCounts[currentLabel] = 0
+        labelCounts[currentLabel] += 1
+    shannonEnt = 0.0
+    for key in labelCounts:
+        prob = float(labelCounts[key]) / numEntries
+        shannonEnt -= prob * log(prob, 2)
+    return shannonEnt
+
+
+def chooseBestFeatureToSplit(dataSet):
+    numFeatures = len(dataSet[0]) - 1
+    baseEntropy = calcShannonEnt(dataSet)
+    bestInfoGain = 0.0
+    bestFeature = -1
+    infoGains = []
+    l = []
+    for i in range(numFeatures):
+        featList = [example[i] for example in dataSet]
+        uniqueVals = set(featList)
+        newEntropy = 0.0
+        for value in uniqueVals:
+            subDataSet = splitDataSet(dataSet, i, value)
+            prob = len(subDataSet) / float(len(dataSet))
+            newEntropy += prob * calcShannonEnt(subDataSet)
+        infoGain = baseEntropy - newEntropy
+        # if (infoGain > bestInfoGain):
+        #     bestInfoGain = infoGain
+        #     bestFeature = i
+        infoGains.append(round(infoGain, 2))
+    for j in range(len(infoGains)):
+        if infoGains[j] == max(infoGains) and infoGains[j] != 0.00:
+            l.append(j)
+    if len(l):
+        bestFeature = l[random.randint(0,len(l)-1)]
+    return bestFeature
+
+
+def splitDataSet(dataSet, axis, value):
+    retDataSet = []
+    for featVec in dataSet:
+        if featVec[axis] == value:
+            reducedFeatVec = featVec[:axis]
+            reducedFeatVec.extend(featVec[axis + 1:])
+            retDataSet.append(reducedFeatVec)
+    return retDataSet
+
+
+def getBestAnswer(dataSet,hotList):
+    classList = [example[-1] for example in dataSet]
+    hot = 0
+    hotClass = classList[0]
+    for item in classList:
+        if hotList[item] > hot:
+            hot = hotList[item]
+            hotClass = item
+    return hotClass
+
+
+def loadFile(filePath):
+    fr = open(filePath)
+    count=0
+    lenses_original=[]
+    lensesLabels_result=[]
+    lensesLabels_original=[]
+    lenses_result=[]
+    hotList={}
+    lensesLabels_quality={}
+    for inst in fr.readlines():
+        if count == 1:
+            lensesLabels_original=inst.strip().split('\t')
+        elif count == 0:
+            quality = inst.strip().split('\t')
+        else:
+            lenses_original.append(inst.strip().split('\t'))
+        count+=1
+        lensesLabels_result=lensesLabels_original[2:]
+    for lense in lenses_original:
+        reducedFeatVec=lense[2:]
+        lenses_result.append(reducedFeatVec)
+    for hot in lenses_original:
+        hotList[hot[-1]]=int(hot[0])
+    for i in range(2,len(lensesLabels_original)-1):
+        lensesLabels_quality[lensesLabels_original[i]]=int(quality[i])
+    return lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality
+    fr.close()
+
+
+def startGame():
+    start_sign = "1"
+    while(start_sign):
+        start_sign=raw_input("would you like to play a game? Y/N:")
+        if start_sign != "N":
+            start_sign = "Y"
+            lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality=prepareGame()
+            break
+        else:
+            print "see you later~"
+            sys.exit()
+
+    while(start_sign):
+        if start_sign == "N":
+            print "see you later~"
+            sys.exit()
+        elif start_sign == "Y":
+            print "let us begin~"
+            start_sign=main(lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality)
+
+
+def prepareGame():
+    filePath = raw_input("Please intput the path of datafile:")
+    lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality=loadFile(filePath)
+    print "data loaded"
+    return lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality
+
+
+def makeDifference(bestfeature_list,lenses_result,labels_original,user_feedback):
+    diff_list={}
+    lenseslabels = labels_original[2:]
+    for key in bestfeature_list:
+        for ex in lenses_result:
+            if ex[-1] == user_feedback:
+                for k in range(len(lenseslabels)-1):
+                    if lenseslabels[k] == key:
+                        if ex[k] != bestfeature_list[key]:
+                            diff_list[key]=bestfeature_list[key]
+    print "your answer list is: "
+    for feature in bestfeature_list:
+        print "question is:"+feature+" your answer is:"+bestfeature_list[feature]
+    if diff_list !={}:
+        print "the different answer list is: "
+        for diff in diff_list:
+            print "question is:"+diff+" your answer is:"+diff_list[diff]
+
+
+def doBackTracking(bestfeature_list,lenses_result,lensesLabels_quality,lensesLabels_result):
+    question_quality= 0
+    question_name= ''
+    bestfeature=-1
+    for backfeature in bestfeature_list:
+        if lensesLabels_quality[backfeature] > question_quality:
+            question_quality = lensesLabels_quality[backfeature]
+            question_name = backfeature
+    del(bestfeature_list[question_name])
+    lenses_to_split=lenses_result[:]
+    labels_to_del=lensesLabels_result[:]
+    for backft in bestfeature_list:
+        for i in range(len(labels_to_del)):
+            if labels_to_del[i] == backft:
+                backindex=i
+                lenses_to_split=splitDataSet(lenses_to_split,backindex,bestfeature_list[backft])
+                del(labels_to_del[backindex])
+                break
+    bestfeature=chooseBestFeatureToSplit(lenses_to_split)
+    return bestfeature,bestfeature_list,lenses_to_split
+
+
+def guessFinal(next_dataset,guess_time,hotList):
+    guess_dataset = next_dataset[:]
+    while(guess_time<3):
+        guess_obj = getBestAnswer(guess_dataset, hotList)
+        print "which you thinking about is: "+guess_obj
+        user_result=raw_input("am i right? Please choose Y/N:")
+        guess_time+=1
+        while (user_result != "Y" and user_result != "N"):
+            user_result=raw_input("Please choose Y/N:")
+        if user_result == "Y":
+            user_feedback=guess_obj
+            break
+        else:
+            temp_guess_dataset=[]
+            for guess_item in guess_dataset:
+                if guess_item[-1] != guess_obj:
+                    temp_guess_dataset.append(guess_item)
+            guess_dataset = temp_guess_dataset
+            if guess_time == 3 or len(guess_dataset) == 0:
+                user_feedback=raw_input("Please input the name which you are thinking:")
+    return user_feedback
+
+
+def main(lenses_result,lensesLabels_result,lensesLabels_original,hotList,lensesLabels_quality):
+    bestfeature=-1
+    lenses = lenses_result[:]
+    labels = lensesLabels_result[:]
+    labels_original=lensesLabels_original[:]
+    bestfeature_list={}
+    bestfeature=chooseBestFeatureToSplit(lenses)
+    print labels[bestfeature]
+    next_dataset=lenses_result[:]
+    time=1
+    flag = 0
+    guess_time = 0
+    limit = 10
+    pushcount= 0
+    while(time <= limit):
+        user_answer=raw_input("Please choose Y/N:")
+        if user_answer == 'Y'or user_answer == 'N':
+            bestfeature_list[labels[bestfeature]]=user_answer
+            del(labels[bestfeature])
+            next_dataset=splitDataSet(next_dataset,bestfeature,user_answer)
+            bestfeature=chooseBestFeatureToSplit(next_dataset)
+            if bestfeature != -1:
+                classList = [example[-1] for example in next_dataset]
+                if len(classList) == 1:
+                    guess_obj = classList[0]
+                    print "which you thinking about is: "+classList[0]
+                    user_result=raw_input("am i right? Please choose Y/N:")
+                    while (user_result != "Y" and user_result != "N"):
+                        user_result=raw_input("Please choose Y/N:")
+                    if user_result == "Y":
+                        user_feedback=classList[0]
+                        flag = 1
+                        break
+                    else:
+                        bestfeature,bestfeature_list,next_dataset=doBackTracking(bestfeature_list,lenses_result,lensesLabels_quality,lensesLabels_result)
+                elif len(classList) <=5 and pushcount != 1:
+                    pushcount = 1
+                    guess_obj = getBestAnswer(next_dataset,hotList)
+                    print "which you thinking about is: "+guess_obj
+                    user_result=raw_input("am i right? Please choose Y/N:")
+                    while (user_result != "Y" and user_result != "N"):
+                        user_result=raw_input("Please choose Y/N:")
+                    if user_result == "Y":
+                        user_feedback=guess_obj
+                        flag = 1
+                        break
+                    else:
+                        ND=[]
+                        for nd in next_dataset:
+                            if nd[-1] != guess_obj:
+                                ND.append(nd)
+                        next_dataset = ND
+                if time < limit:
+                        print labels[bestfeature]
+            else:
+                print "which you thinking about is: "+getBestAnswer(next_dataset, hotList)
+                user_result=raw_input("am i right? Please choose Y/N:")
+                while (user_result != "Y" and user_result != "N"):
+                    user_result=raw_input("Please choose Y/N:")
+                if user_result == "Y":
+                    user_feedback=getBestAnswer(next_dataset, hotList)
+                    flag = 1
+                    break
+                else:
+                    bestfeature,bestfeature_list,next_dataset=doBackTracking(bestfeature_list,lenses_result,lensesLabels_quality,lensesLabels_result)
+                print labels[bestfeature]
+            time+=1
+    if flag != 1:
+        user_feedback = guessFinal(next_dataset,guess_time,hotList)
+    makeDifference(bestfeature_list,lenses_result,labels_original,user_feedback)
+    restart_sign=raw_input("would you like to play again? Y/N:")
+    if restart_sign == "N":
+        return restart_sign
+    else:
+        return "Y"
+
+
+if __name__ == '__main__':
+    startGame()
+
+
+
+
+# print(json.dumps(hotlist, encoding="UTF-8", ensure_ascii=False))
+# C:\Users\Administrator\Downloads\矩阵.tsv
