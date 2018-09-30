@@ -1,0 +1,96 @@
+# -*-coding:utf-8-*-
+__author__ = 'Administrator'
+from lxml import etree
+import requests
+import json
+
+headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) \
+        Chrome/50.0.2661.102 UBrowser/6.1.2107.8 Safari/537.36'}
+
+
+herolist_w = open(r'C:\Users\h\Desktop\herolist', 'w')
+pagelist =    r'http://pvp.qq.com/web201605/herolist.shtml'
+req_pageurl = requests.get(pagelist,headers = headers)
+tree_pageurl = etree.HTML(req_pageurl.text.encode(req_pageurl.encoding).decode("gbk","ignore"))
+hero_seeds = tree_pageurl.xpath(u"//ul[@class='herolist clearfix']/li/a/@href")
+hero_lists={}
+for hero_list in tree_pageurl.xpath(u"//ul[@class='herolist clearfix']/li/a"):
+    hero_lists[','.join(hero_list.xpath(u"@href"))[-9:]]=','.join(hero_list.xpath(u"img/@alt"))
+herolist_w.write('\n'.join(hero_seeds).replace(' ',''))
+herolist_w.close()
+
+print "Seeds Crawling finish"
+
+pagelist = r'http://pvp.qq.com/web201605/item.shtml'
+req_pageurl = requests.get(pagelist,headers = headers)
+tree_pageurl = etree.HTML(req_pageurl.text.encode(req_pageurl.encoding).decode("gbk","ignore"))
+equips_seeds = tree_pageurl.xpath(u"//ul[@class='clearfix herolist']/li")
+equips_list={}
+for equips_seed in equips_seeds:
+    equips_list[','.join(equips_seed.xpath(u"a/img/@src"))[-8:-4]]=','.join(equips_seed.xpath(u"a/img/@alt"))
+print "equips Crawling finish"
+
+
+
+herolist_r = open(r'C:\Users\h\Desktop\herolist', 'r')
+heroinfo_w = open(r'C:\Users\h\Desktop\heroinfo', 'w')
+for seed in herolist_r:
+    pageinfo_url = "http://pvp.qq.com/web201605/"+seed.replace('\n','')
+    print pageinfo_urlz
+    req_pageinfo_url = requests.get(pageinfo_url,headers = headers)
+    tree_pageinfo_url = etree.HTML(req_pageinfo_url.text.encode(req_pageinfo_url.encoding).decode("gbk","ignore"))
+    title = ','.join(tree_pageinfo_url.xpath(u"//div[@class='cover']/h3[@class='cover-title']/text()"))
+    name =  ','.join(tree_pageinfo_url.xpath(u"//div[@class='cover']/h2[@class='cover-name']/text()"))
+    story = ','.join(tree_pageinfo_url.xpath(u"//div[@class='pop-hd'][contains(.,'英雄故事')]/following-sibling::div[@class='pop-bd']/p/text()"))
+    history = ','.join(tree_pageinfo_url.xpath(u"//div[@class='pop-hd'][contains(.,'历史')]/following-sibling::div[@class='pop-bd']/p/text()"))
+    tag = ','.join(tree_pageinfo_url.xpath(u"//div[@class='cover']/span[@class='herodetail-sort']/i\
+        /@class")).replace("herodetail-sort-1","战士").replace("herodetail-sort-2","法师").replace("herodetail-sort-3","坦克")\
+        .replace("herodetail-sort-4","刺客").replace("herodetail-sort-5","射手").replace("herodetail-sort-6","辅助")
+    ability={}
+    ability["生存能力"] = ','.join(tree_pageinfo_url.xpath(u"//ul[@class='cover-list']/li/span[@class='cover-list-bar data-bar1 fl']/i/@style")).replace('width:','')
+    ability["攻击伤害"] = ','.join(tree_pageinfo_url.xpath(u"//ul[@class='cover-list']/li/span[@class='cover-list-bar data-bar2 fl']/i/@style")).replace('width:','')
+    ability["技能效果"] = ','.join(tree_pageinfo_url.xpath(u"//ul[@class='cover-list']/li/span[@class='cover-list-bar data-bar3 fl']/i/@style")).replace('width:','')
+    ability["上手难度"] = ','.join(tree_pageinfo_url.xpath(u"//ul[@class='cover-list']/li/span[@class='cover-list-bar data-bar4 fl']/i/@style")).replace('width:','')
+    cover_image = ','.join(tree_pageinfo_url.xpath(u"//div[@class='zk-con1 zk-con']/@style"))
+    skill_state = tree_pageinfo_url.xpath(u"//div[@class='skill-show']/div[@class='show-list']")
+    skill_list = []
+    for div in skill_state:
+        skill = {}
+        skill["技能名称"] = ','.join(div.xpath(u"p[@class='skill-name']/b/text()"))
+        skill["技能冷却"] = ','.join(div.xpath(u"p[@class='skill-name']/span/text()"))
+        skill["技能描述"] = ','.join(div.xpath(u"p[@class='skill-desc']/text()"))
+        skill["技能提示"] = ','.join(div.xpath(u"div[@class='skill-tips']/text()"))
+        skill_list.append(skill)
+    sugg_name = ','.join(tree_pageinfo_url.xpath(u"//p[@class='sugg-name sugg-name3']/span/text()"))
+    relation_hero_list={}
+    relation_heros=tree_pageinfo_url.xpath(u"//div[@class='hero-info l info']")
+    for relation_hero in relation_heros:
+        hero_name_list=[]
+        for i in relation_hero.xpath(u"div[@class='hero-list hero-relate-list fl']/ul/li/a/@href"):
+            if hero_lists.get(i) is not None:
+                hero_name_list.append(hero_lists.get(i))
+        relation_hero_list[','.join(relation_hero.xpath(u"div[@class='hero-f1 fl']/text()"))] =','.join(hero_name_list)
+    equip_lists=[]
+    for e in ('|'.join(tree_pageinfo_url.xpath(u"//ul[@class='equip-list fl']/@data-item")).split('|')):
+        if equips_list.get(e) is not None:
+            equip_lists.append(equips_list.get(e))
+    equip_list = ','.join(equip_lists)
+    python2json = {}
+    python2json["url"] = pageinfo_url
+    python2json["称号"] = title
+    python2json["名字"] = name
+    python2json["故事"] = story
+    python2json["历史"] = history
+    python2json["位置"] = tag
+    python2json["能力数值"] = ability
+    python2json["封图"] = cover_image
+    python2json["技能"] = skill_list
+    python2json["召唤师技能"] = sugg_name
+    python2json["英雄关系"] = relation_hero_list
+    python2json["推荐装备"] = equip_list
+
+
+    heroinfo_w.write(json.dumps(python2json)+'\n')
+herolist_r.close()
+heroinfo_w.close()
+print "all done"
